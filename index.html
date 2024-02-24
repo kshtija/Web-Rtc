@@ -44,25 +44,6 @@
             // Generate and display QR code
             generateQRCode(clientId);
 
-            // Set up data channel for communication
-            const dataChannel = peerConnection.createDataChannel('dataChannel');
-            dataChannel.onmessage = event => {
-                const message = JSON.parse(event.data);
-                if (message.type === 'offer') {
-                    peerConnection.setRemoteDescription(new RTCSessionDescription(message.offer))
-                        .then(() => peerConnection.createAnswer())
-                        .then(answer => peerConnection.setLocalDescription(answer))
-                        .then(() => {
-                            // Send answer over the data channel
-                            dataChannel.send(JSON.stringify({ type: 'answer', answer: peerConnection.localDescription }));
-                        })
-                        .catch(error => console.error('Error creating answer:', error));
-                } else if (message.type === 'answer') {
-                    peerConnection.setRemoteDescription(new RTCSessionDescription(message.answer))
-                        .catch(error => console.error('Error setting remote description:', error));
-                }
-            };
-
             // Offer to connect
             peerConnection.createOffer()
                 .then(offer => peerConnection.setLocalDescription(offer))
