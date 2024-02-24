@@ -41,12 +41,31 @@
                 }
             };
 
+            // Handle ICE candidates
+            peerConnection.onicecandidate = event => {
+                if (event.candidate) {
+                    sendSignal({
+                        type: 'candidate',
+                        candidate: event.candidate
+                    });
+                }
+            };
+
             // Generate and display QR code
             generateQRCode(clientId);
+            
+            // Start listening for signaling data
+            startSignalingListener();
 
             // Offer to connect
             peerConnection.createOffer()
-                .then(offer => peerConnection.setLocalDescription(offer))
+                .then(offer => {
+                    peerConnection.setLocalDescription(offer);
+                    sendSignal({
+                        type: 'offer',
+                        offer: offer
+                    });
+                })
                 .catch(error => console.error('Error creating offer:', error));
         }
 
@@ -75,6 +94,50 @@
         // Generate a random client ID
         function generateClientId() {
             return Math.random().toString(36).substring(7);
+        }
+
+        // Send signaling data to the other peer
+        function sendSignal(data) {
+            const signal = JSON.stringify(data);
+            // For simplicity, we will use alert to display the signal,
+            // In a real-world scenario, you would use a signaling server
+            alert('Signal to be sent: ' + signal);
+        }
+
+        // Start listening for signaling data
+        function startSignalingListener() {
+            // For simplicity, we will use prompt to receive the signal,
+            // In a real-world scenario, you would use a signaling server
+            const signal = prompt('Enter received signal:');
+            handleSignal(JSON.parse(signal));
+        }
+
+        // Handle signaling data received from the other peer
+        function handleSignal(data) {
+            switch (data.type) {
+                case 'offer':
+                    peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer))
+                        .then(() => peerConnection.createAnswer())
+                        .then(answer => {
+                            peerConnection.setLocalDescription(answer);
+                            sendSignal({
+                                type: 'answer',
+                                answer: answer
+                            });
+                        })
+                        .catch(error => console.error('Error creating answer:', error));
+                    break;
+                case 'answer':
+                    peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer))
+                        .catch(error => console.error('Error setting remote description:', error));
+                    break;
+                case 'candidate':
+                    peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate))
+                        .catch(error => console.error('Error adding ICE candidate:', error));
+                    break;
+                default:
+                    console.error('Unknown signal type:', data.type);
+            }
         }
     </script>
 </body>
