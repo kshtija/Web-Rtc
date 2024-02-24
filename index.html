@@ -18,13 +18,13 @@
         let qrCode;
 
         // Generate QR code with client ID as URL parameter
-        function generateQRCode(clientId, offer) {
-            const url = window.location.href.split('?')[0] + `?clientId=${clientId}&offer=${encodeURIComponent(JSON.stringify(offer))}`;
+        function generateQRCode(clientId) {
+            const url = window.location.href.split('?')[0] + `?clientId=${clientId}`;
             qrCode = new QRCode(document.getElementById('qrCodeContainer'), url);
         }
 
         // Start the connection
-        function startConnection(clientId, offer) {
+        function startConnection(clientId) {
             // Create a peer connection object
             peerConnection = new RTCPeerConnection();
 
@@ -51,17 +51,16 @@
                 }
             };
 
-            // Set remote description
-            peerConnection.setRemoteDescription(new RTCSessionDescription(offer))
-                .then(() => peerConnection.createAnswer())
-                .then(answer => peerConnection.setLocalDescription(answer))
-                .then(() => {
+            // Offer to connect
+            peerConnection.createOffer()
+                .then(offer => {
+                    peerConnection.setLocalDescription(offer);
                     sendSignal({
-                        type: 'answer',
-                        answer: peerConnection.localDescription
+                        type: 'offer',
+                        offer: offer
                     });
                 })
-                .catch(error => console.error('Error creating answer:', error));
+                .catch(error => console.error('Error creating offer:', error));
         }
 
         // Get user media for local video
@@ -70,19 +69,16 @@
                 localStream = stream;
                 document.getElementById('localVideo').srcObject = stream;
 
-                // Extract client ID and offer from URL parameters
+                // Extract client ID from URL parameters
                 const urlParams = new URLSearchParams(window.location.search);
                 const clientId = urlParams.get('clientId');
-                const offerParam = urlParams.get('offer');
 
-                if (clientId && offerParam) {
-                    const offer = JSON.parse(decodeURIComponent(offerParam));
-                    startConnection(clientId, offer);
+                if (clientId) {
+                    startConnection(clientId); // If client ID exists in URL parameters, start the connection
                 } else {
-                    // If no client ID or offer, generate one and start the connection
+                    // If no client ID, generate one and start the connection
                     const newClientId = generateClientId();
-                    const offer = await createOffer();
-                    generateQRCode(newClientId, offer);
+                    startConnection(newClientId);
                 }
             })
             .catch(error => {
@@ -94,19 +90,46 @@
             return Math.random().toString(36).substring(7);
         }
 
-        // Create offer
-        async function createOffer() {
-            const offer = await peerConnection.createOffer();
-            await peerConnection.setLocalDescription(offer);
-            return offer;
-        }
-
         // Send signaling data to the other peer
         function sendSignal(data) {
             const signal = JSON.stringify(data);
-            // Simulate sending the signal (in a real scenario, you'd send this to the other peer)
-            alert('Signal to be sent: ' + signal);
+            // For simplicity, we will use a global prompt to display the signal,
+            // In a real-world scenario, you would use a signaling server
+            window.prompt('Copy this signal and paste it to the other browser:', signal);
         }
-    </script>
-</body>
-</html>
+
+        // Handle signaling data received from the other peer
+        function handleSignal(data) {
+            switch (data.type) {
+                case 'offer':
+                    peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer))
+                        .then(() => peerConnection.createAnswer())
+                        .then(answer => {
+                            peerConnection.setLocalDescription(answer);
+                            sendSignal({
+                                type: 'answer',
+                                answer: answer
+                            });
+                        })
+                        .catch(error => console.error('Error creating answer:', error));
+                    break;
+                case 'answer':
+                    peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer))
+                        .catch(error => console.error('Error setting remote description:', error));
+                    break;
+                case 'candidate':
+                    peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate))
+                        .catch(error => console.error('Error adding ICE candidate:', error));
+                    break;
+                default:
+                    console.error('Unknown signal type:', data.type);
+            }
+        }
+
+        // Listen for signaling data
+        window.addEventListener('message', event => {
+            const data = JSON.parse(event.data);
+            handleSignal(data);
+        });
+
+        // Function to send signaling data
