@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebRTC QR Code</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" integrity="sha512-CNgIRecGo7nphbeZ04Sc13ka07paqdeTu0WR1IM4kNcpmBAUSHSQX0FslNhTDadL4O5SAGapGt4FodqL8My0mA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+</head>
+<body>
+    <h1>WebRTC QR Code</h1>
+    <video id="localVideo" autoplay muted style="width: 320px; height: 240px;"></video>
+    <div id="qrCodeContainer"></div>
+
+    <script>
+        let localStream;
+        let peerConnection;
+        let qrCode;
+
+        // Generate QR code with client ID as URL parameter
+        function generateQRCode(clientId) {
+            const url = window.location.href.split('?')[0] + `?clientId=${clientId}`;
+            qrCode = new QRCode(document.getElementById('qrCodeContainer'), {
+                text: url,
+                width: 128,
+                height: 128,
+                colorDark: "#000000",
+                colorLight: "#ffffff",
+                correctLevel: QRCode.CorrectLevel.H
+            });
+        }
+
+        // Start the connection
+        function startConnection(clientId) {
+            // Create a peer connection object
+            peerConnection = new RTCPeerConnection();
+
+            // Add the local stream to the connection
+            localStream.getTracks().forEach(track => {
+                peerConnection.addTrack(track, localStream);
+            });
+
+            // Handle incoming data
+            peerConnection.ondatachannel = event => {
+                const receiveChannel = event.channel;
+                receiveChannel.onmessage = event => {
+                    console.log("Received message:", event.data);
+                };
+            };
+
+            // Offer to connect
+            peerConnection.createOffer()
+                .then(offer => peerConnection.setLocalDescription(offer))
+                .catch(error => console.error('Error creating offer:', error));
+        }
+
+        // Get user media for local video
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(stream => {
+                localStream = stream;
+                document.getElementById('localVideo').srcObject = stream;
+
+                // Extract client ID from URL parameters
+                const urlParams = new URLSearchParams(window.location.search);
+                const clientId = urlParams.get('clientId');
+
+                if (clientId) {
+                    startConnection(clientId); // If client ID exists in URL parameters, start the connection
+                } else {
+                    // If no client ID, generate one and display QR code
+                    const newClientId = generateClientId();
+                    generateQRCode(newClientId);
+                }
+            })
+            .catch(error => {
+                console.error('Error accessing webcam:', error);
+            });
+
+        // Generate a random client ID
+        function generateClientId() {
+            return Math.random().toString(36).substring(7);
+        }
+    </script>
+
+</body>
+</html>
