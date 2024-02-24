@@ -4,29 +4,26 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WebRTC QR Code</title>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" integrity="sha512-CNgIRecGo7nphbeZ04Sc13ka07paqdeTu0WR1IM4kNcpmBAUSHSQX0FslNhTDadL4O5SAGapGt4FodqL8My0mA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 </head>
 <body>
     <h1>WebRTC QR Code</h1>
     <video id="localVideo" autoplay muted style="width: 320px; height: 240px;"></video>
+    <video id="remoteVideo" autoplay style="width: 320px; height: 240px;"></video>
     <div id="qrCodeContainer"></div>
 
-    <script>
+    <script type="text/javascript" defer>
         let localStream;
         let peerConnection;
         let qrCode;
 
+
         // Generate QR code with client ID as URL parameter
         function generateQRCode(clientId) {
             const url = window.location.href.split('?')[0] + `?clientId=${clientId}`;
-            qrCode = new QRCode(document.getElementById('qrCodeContainer'), {
-                text: url,
-                width: 128,
-                height: 128,
-                colorDark: "#000000",
-                colorLight: "#ffffff",
-                correctLevel: QRCode.CorrectLevel.H
-            });
+            qrCode = new QRCode(document.getElementById('qrCodeContainer'), url);
+            console.log(url);
         }
 
         // Start the connection
@@ -39,13 +36,16 @@
                 peerConnection.addTrack(track, localStream);
             });
 
-            // Handle incoming data
-            peerConnection.ondatachannel = event => {
-                const receiveChannel = event.channel;
-                receiveChannel.onmessage = event => {
-                    console.log("Received message:", event.data);
-                };
+            // Handle incoming streams
+            peerConnection.ontrack = event => {
+                const remoteVideo = document.getElementById('remoteVideo');
+                if (!remoteVideo.srcObject) {
+                    remoteVideo.srcObject = event.streams[0];
+                }
             };
+
+            // Generate and display QR code
+            generateQRCode(clientId);
 
             // Offer to connect
             peerConnection.createOffer()
@@ -75,11 +75,10 @@
                 console.error('Error accessing webcam:', error);
             });
 
-        // Generate a random client ID
-        function generateClientId() {
+            function generateClientId() {
             return Math.random().toString(36).substring(7);
         }
-    </script>
 
+    </script>
 </body>
 </html>
