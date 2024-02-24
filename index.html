@@ -11,7 +11,6 @@
     <video id="localVideo" autoplay muted style="width: 320px; height: 240px;"></video>
     <video id="remoteVideo" autoplay style="width: 320px; height: 240px;"></video>
     <div id="qrCodeContainer"></div>
-    <textarea id="sessionDescription" readonly style="width: 320px; height: 100px;"></textarea>
 
     <script>
         let localStream;
@@ -45,12 +44,28 @@
             // Generate and display QR code
             generateQRCode(clientId);
 
+            // Set up data channel for communication
+            const dataChannel = peerConnection.createDataChannel('dataChannel');
+            dataChannel.onmessage = event => {
+                const message = JSON.parse(event.data);
+                if (message.type === 'offer') {
+                    peerConnection.setRemoteDescription(new RTCSessionDescription(message.offer))
+                        .then(() => peerConnection.createAnswer())
+                        .then(answer => peerConnection.setLocalDescription(answer))
+                        .then(() => {
+                            // Send answer over the data channel
+                            dataChannel.send(JSON.stringify({ type: 'answer', answer: peerConnection.localDescription }));
+                        })
+                        .catch(error => console.error('Error creating answer:', error));
+                } else if (message.type === 'answer') {
+                    peerConnection.setRemoteDescription(new RTCSessionDescription(message.answer))
+                        .catch(error => console.error('Error setting remote description:', error));
+                }
+            };
+
             // Offer to connect
             peerConnection.createOffer()
-                .then(offer => {
-                    document.getElementById('sessionDescription').value = JSON.stringify(offer);
-                    peerConnection.setLocalDescription(offer);
-                })
+                .then(offer => peerConnection.setLocalDescription(offer))
                 .catch(error => console.error('Error creating offer:', error));
         }
 
@@ -80,7 +95,6 @@
         function generateClientId() {
             return Math.random().toString(36).substring(7);
         }
-
     </script>
 </body>
 </html>
